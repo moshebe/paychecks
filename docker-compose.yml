@@ -1,12 +1,6 @@
-version: "3.8"
 services:
   paychecks:
     build: .
+    env_file: .env
     volumes:
-      - $PWD/out:/tmp/output
-    environment:
-      ID: ${ID}
-      EMAIL: ${EMAIL}
-      PASSWORD: ${PASSWORD}
-      PDF_PASSWORDS: ${PDF_PASSWORDS}
-      FILTER_INBOX: ${FILTER_INBOX}
+      - ./out:/tmp/output

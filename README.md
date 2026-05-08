@@ -17,5 +17,6 @@ First, create `.env` file with your configuration or just edit the environment o
 
 Now, you can simply run:
 ```
-docker-compose up --remove-orphans
+make up      # docker compose (no local Go/qpdf needed)
+make dev     # run locally (requires Go + qpdf)
 ```
