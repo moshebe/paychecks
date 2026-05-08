@@ -35,7 +35,7 @@ type filter struct {
 	Inbox    string   `env:"FILTER_INBOX" envDefault:"Inbox"`
 	Subject  string   `env:"FILTER_SUBJECT"`
 	From     string   `env:"FILTER_FROM"`
-	Body     []string `env:"FILTER_BODY" envSeparator:";" envDefault:"תלוש משכורת"`
+	Body     []string `env:"FILTER_BODY" envSeparator:";" envDefault:"תלוש משכורת;טופס 106"`
 	GmailRaw string   `env:"FILTER_GMAIL_RAW"`
 }
 
@@ -157,6 +157,43 @@ func (p *paychecks) fetch(results []uint32, attachment func(filename, year strin
 	return nil
 }
 
+// searchByBody runs one IMAP search per body term and merges the ids. Each
+// body term is OR-combined; passing them as a slice to a single search would
+// be AND-combined by IMAP, which makes multi-term filters useless.
+func (p *paychecks) searchByBody(c *client.Client) ([]uint32, error) {
+	bodies := p.Filter.Body
+	if len(bodies) == 0 {
+		bodies = []string{""}
+	}
+
+	seen := map[uint32]struct{}{}
+	var ids []uint32
+	for _, body := range bodies {
+		sc := &imap.SearchCriteria{Header: textproto.MIMEHeader{}}
+		if body != "" {
+			sc.Body = []string{body}
+		}
+		if p.Filter.From != "" {
+			sc.Header.Set("From", p.Filter.From)
+		}
+		if p.Filter.Subject != "" {
+			sc.Header.Set("Subject", p.Filter.Subject)
+		}
+		res, err := c.Search(sc)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range res {
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
 func gmailRawSearch(c *client.Client, query string) ([]uint32, error) {
 	cmd := &imap.Command{
 		Name: "SEARCH",
@@ -218,14 +255,7 @@ func run() error {
 	if p.Filter.GmailRaw != "" {
 		searchResults, err = gmailRawSearch(c, p.Filter.GmailRaw)
 	} else {
-		sc := &imap.SearchCriteria{Body: p.Filter.Body, Header: textproto.MIMEHeader{}}
-		if p.Filter.From != "" {
-			sc.Header.Set("From", p.Filter.From)
-		}
-		if p.Filter.Subject != "" {
-			sc.Header.Set("Subject", p.Filter.Subject)
-		}
-		searchResults, err = c.Search(sc)
+		searchResults, err = p.searchByBody(c)
 	}
 	if err != nil {
 		return err
